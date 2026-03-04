@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import sys
 import uuid
 from dataclasses import dataclass
 from time import perf_counter
@@ -210,15 +211,19 @@ class IcebergSinkState:
 
         start_instant = perf_counter()
 
-        data_file_paths = (
-            _expand_paths(
-                self.output_base_path(),
-                storage_options=self._get_converted_storage_options(),
-            )
-            .collect()
-            .to_series()
-            .to_list()
+        output_base_path = self.output_base_path()
+
+        data_file_paths_q = _expand_paths(
+            _normalize_windows_iceberg_file_uri(output_base_path),
+            storage_options=self._get_converted_storage_options(),
         )
+
+        if sys.platform == "win32" and output_base_path.startswith("file:///"):
+            data_file_paths_q = data_file_paths_q.with_columns(
+                pl.col("path").str.replace(r"^file:///", "file://")
+            )
+
+        data_file_paths = data_file_paths_q.collect().to_series().to_list()
 
         if verbose:
             elapsed = perf_counter() - start_instant

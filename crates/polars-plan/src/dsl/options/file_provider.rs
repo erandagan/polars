@@ -51,7 +51,7 @@ impl FileProviderType {
         use FileProviderType::*;
 
         match self {
-            Iceberg(p) => p.file_part_prefix_mut(),
+            Iceberg(p) => Some(p.file_part_prefix_mut()),
             Hive(_) | Function(_) => None,
         }
     }
@@ -101,8 +101,8 @@ pub struct IcebergPathProvider {
 }
 
 impl IcebergPathProvider {
-    pub fn file_part_prefix_mut(&mut self) -> Option<&mut Option<Box<str>>> {
-        Some(&mut self.file_part_prefix)
+    pub fn file_part_prefix_mut(&mut self) -> &mut Option<Box<str>> {
+        &mut self.file_part_prefix
     }
 
     /// # Panics
