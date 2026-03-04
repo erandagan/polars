@@ -475,6 +475,7 @@ impl ProjectionPushDown {
                             FileScanIR::Anonymous { function, .. } => {
                                 function.allows_projection_pushdown()
                             },
+                            FileScanIR::ExpandedPaths { .. } => false,
                             #[cfg(feature = "json")]
                             FileScanIR::NDJson { .. } => true,
                             #[cfg(feature = "ipc")]
