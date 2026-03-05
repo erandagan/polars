@@ -249,6 +249,34 @@ def test_pyarrow_dataset_partial_predicate_pushdown(
     assert_frame_equal(result, expected)
 
 
+def test_pyarrow_dataset_is_in_predicate_pushdown(
+    tmp_path: Path,
+    plmonkeypatch: PlMonkeyPatch,
+    capfd: pytest.CaptureFixture[str],
+) -> None:
+    plmonkeypatch.setenv("POLARS_VERBOSE_SENSITIVE", "1")
+
+    df = pl.DataFrame({"id": [1, 2, 3, 4, 5], "val": [10, 20, 30, 40, 50]})
+    path = tmp_path / "test.parquet"
+    df.write_parquet(path)
+    dset = ds.dataset(path, format="parquet")
+
+    q = pl.scan_pyarrow_dataset(dset).filter(pl.col("id").is_in([1, 3]))
+
+    capfd.readouterr()
+    result = q.collect()
+    capture = capfd.readouterr().err
+
+    # Verify: predicate fully pushed to pyarrow
+    assert "(pa.compute.field('id')).isin([1,3])" in capture
+    # Verify: no residual predicate
+    assert "residual predicate: None" in capture
+
+    # Verify: correctness
+    expected = df.lazy().filter(pl.col("id").is_in([1, 3])).collect()
+    assert_frame_equal(result, expected)
+
+
 def test_pyarrow_dataset_comm_subplan_elim(tmp_path: Path) -> None:
     df0 = pl.DataFrame({"a": [1, 2, 3]})
 
