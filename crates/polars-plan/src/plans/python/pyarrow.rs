@@ -127,15 +127,8 @@ pub fn predicate_to_pa(
                 },
                 #[cfg(feature = "dtype-datetime")]
                 AnyValue::Datetime(v, tu, tz) => Some(to_py_datetime(v, &tu, tz)),
-                AnyValue::List(s) => {
-                    if args.allow_literal_series {
-                        series_to_pyarrow_list(&s)
-                    } else {
-                        None
-                    }
-                },
                 // Hard to sanitize
-                AnyValue::Binary(_) => None,
+                AnyValue::Binary(_) | AnyValue::List(_) => None,
                 #[cfg(feature = "dtype-array")]
                 AnyValue::Array(_, _) => None,
                 #[cfg(feature = "dtype-struct")]
@@ -177,9 +170,23 @@ pub fn predicate_to_pa(
             ..
         } => {
             let col = predicate_to_pa(input.first()?.node(), expr_arena, args)?;
-            let mut args = args;
-            args.allow_literal_series = true;
-            let values = predicate_to_pa(input.get(1)?.node(), expr_arena, args)?;
+            let rhs_node = input.get(1)?.node();
+            let mut is_in_args = args;
+            is_in_args.allow_literal_series = true;
+            let values = predicate_to_pa(rhs_node, expr_arena, is_in_args)
+                .or_else(|| {
+                    // Handle AnyValue::List directly for is_in RHS only
+                    match expr_arena.get(rhs_node) {
+                        AExpr::Literal(lv) => {
+                            let av = lv.to_any_value()?;
+                            match av.as_borrowed() {
+                                AnyValue::List(s) => series_to_pyarrow_list(&s),
+                                _ => None,
+                            }
+                        },
+                        _ => None,
+                    }
+                })?;
 
             Some(format!("({col}).isin({values})"))
         },
